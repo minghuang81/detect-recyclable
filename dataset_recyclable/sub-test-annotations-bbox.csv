@@ -1,0 +1,10 @@
+ImageID,Source,LabelName,Confidence,XMin,XMax,YMin,YMax,IsOccluded,IsTruncated,IsGroupOf,IsDepiction,IsInside,id,ClassName
+IMG_20200210_134150,xxx,recyclable,1,487,1676,410,1539,0,0,0,0,0,recyclable,recyclable
+IMG_20200210_134149,xxx,recyclable,1,751,1912,688,1827,0,0,0,0,0,recyclable,recyclable
+IMG_20200210_134141,xxx,recyclable,1,1380,2856,410,1804,0,0,0,0,0,recyclable,recyclable
+IMG_20200210_134140,xxx,recyclable,1,1503,2901,428,1813,0,0,0,0,0,recyclable,recyclable
+IMG_20200210_134134,xxx,recyclable,1,376,1971,30,1632,0,0,0,0,0,recyclable,recyclable
+IMG_20200210_133447,xxx,recyclable,1,815,2159,843,2187,0,0,0,0,0,recyclable,recyclable
+IMG_20200210_133441,xxx,recyclable,1,1193,2067,742,1612,0,0,0,0,0,recyclable,recyclable
+IMG_20200210_133435,xxx,recyclable,1,1489,2600,824,1780,0,0,0,0,0,recyclable,recyclable
+IMG_20200210_133430,xxx,recyclable,1,952,2332,510,1822,0,0,0,0,0,recyclable,recyclable
