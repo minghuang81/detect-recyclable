@@ -7,13 +7,14 @@ from ..utils.misc import Timer
 
 class Predictor:
     def __init__(self, net, size, mean=0.0, std=1.0, nms_method=None,
-                 iou_threshold=0.45, filter_threshold=0.01, candidate_size=200, sigma=0.5, device=None):
+                 iou_threshold=0.45, filter_threshold=0.01, candidate_size=200, sigma=0.5, device=None, config=None):
         self.net = net
         self.transform = PredictionTransform(size, mean, std)
         self.iou_threshold = iou_threshold
         self.filter_threshold = filter_threshold
         self.candidate_size = candidate_size
         self.nms_method = nms_method
+        self.config = config
 
         self.sigma = sigma
         if device:
@@ -60,6 +61,13 @@ class Predictor:
         #  [0.7257, 0.2743]]])-shape torch.Size([1, 3000, 2]) <= 2 candidate classes : background 0, my class 1.
         boxes = boxes[0]    # shape (3000,4)
         scores = scores[0]  # shape (3000,2)
+
+        # boxes center-form relative to Priors => center-form normalized to image size => normalized corner-form
+        boxes = box_utils.convert_locations_to_boxes(
+            boxes, self.config.priors, self.config.center_variance, self.config.size_variance
+        )
+        boxes = box_utils.center_form_to_corner_form(boxes)
+
         if not prob_threshold:
             prob_threshold = self.filter_threshold
         # this version of nms is slower on GPU, so we move data to CPU.
