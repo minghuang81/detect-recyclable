@@ -59,13 +59,13 @@ def generate_ssd_priors(specs, image_size, clamp=True):
     """
     priors = []
     for spec in specs:
-        scale = image_size / spec.shrinkage # scale means number of (horizontal or vertical) grids
+        scale = float(image_size) / spec.shrinkage # scale means number of (horizontal or vertical) grids
         for j, i in itertools.product(range(spec.feature_map_size), repeat=2):
             x_center = (i + 0.5) / scale # range [0..1] with 0 meaning complet left corner of image, 1 complete right
             y_center = (j + 0.5) / scale
 
             # small sized square box. w h x y are related to image size
-            size = spec.box_sizes.min
+            size = float(spec.box_sizes.min)
             h = w = size / image_size
             priors.append([
                 x_center,
@@ -85,7 +85,7 @@ def generate_ssd_priors(specs, image_size, clamp=True):
             ])
 
             # change h/w ratio of the small sized box
-            size = spec.box_sizes.min
+            size = float(spec.box_sizes.min)
             h = w = size / image_size
             for ratio in spec.aspect_ratios:
                 ratio = math.sqrt(ratio)

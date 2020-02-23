@@ -33,7 +33,7 @@ def jaccard_numpy(box_a, box_b):
     area_b = ((box_b[2]-box_b[0]) *
               (box_b[3]-box_b[1]))  # [A,B]
     union = area_a + area_b - inter
-    return inter / union  # [A,B]
+    return inter * 1.0 / union  # [A,B]
 
 
 class Compose(object):
@@ -96,10 +96,10 @@ class ToAbsoluteCoords(object):
 class ToPercentCoords(object):
     def __call__(self, image, boxes=None, labels=None):
         height, width, channels = image.shape
-        boxes[:, 0] /= width
-        boxes[:, 2] /= width
-        boxes[:, 1] /= height
-        boxes[:, 3] /= height
+        boxes[:, 0] /= float(width)
+        boxes[:, 2] /= float(width)
+        boxes[:, 1] /= float(height)
+        boxes[:, 3] /= float(height)
 
         return image, boxes, labels
 

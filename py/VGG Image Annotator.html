@@ -545,6 +545,22 @@
           <div id="img_fn_list"></div>
         </div>
 
+        <button class="leftsidebar_accordion active" id="class_lab_panel_title">Class Labels</button>
+        <div class="leftsidebar_accordion_panel show" id="lab_fn_list_panel">
+          <div>
+            <input type="text" placeholder="Filter using regular expression" oninput="lab_fn_list_onregex()" id="lab_fn_list_regex">
+          </div>
+          <div id="lab_fn_list"></div>
+        </div>
+        
+        <button class="leftsidebar_accordion active" id="edit_lab_panel_title">Edit Labels</button>
+        <div class="leftsidebar_accordion_panel  show" id="lab_fn_edit_panel">
+          <div>
+            <input type="text" placeholder="new label" oninput="lab_fn_list_onnew()" id="lab_fn_list_new">
+            <button id="lab_fn_list_add" disabled onclick="lab_fn_list_onadd()"> + </button>
+          </div>
+        </div>
+
         <button class="leftsidebar_accordion">Keyboard Shortcuts</button>
         <div class="leftsidebar_accordion_panel">
           <table style="padding: 2em 0em;">
@@ -812,6 +828,8 @@ var _via_canvas_scale   = 1.0;// current scale of canvas image
 var _via_image_id_list  = []; // array of image id (in original order)
 var _via_image_id       = ''; // id={filename+length} of current image
 var _via_image_index    = -1; // index
+//----
+var _via_label_index    = -1; // label index
 
 var _via_current_image_filename;
 var _via_current_image;
@@ -881,7 +899,10 @@ var _via_reload_img_fn_list_table = true;
 var _via_loaded_img_fn_list = [];
 var _via_loaded_img_fn_list_file_index = [];
 var _via_loaded_img_fn_list_table_html = [];
-
+// label list
+var _via_loaded_lab_fn_list = [];
+var _via_loaded_lab_fn_list_file_index = [];
+var _via_loaded_lab_fn_list_table_html = [];
 
 // UI html elements
 var invisible_file_input = document.getElementById("invisible_file_input");
@@ -893,7 +914,9 @@ var annotation_list_snippet = document.getElementById("annotation_list_snippet")
 var annotation_textarea     = document.getElementById("annotation_textarea");
 
 var img_fn_list_panel     = document.getElementById('img_fn_list_panel');
+var lab_fn_list_panel     = document.getElementById('lab_fn_list_panel');
 var img_fn_list           = document.getElementById('img_fn_list');
+var lab_fn_list           = document.getElementById('lab_fn_list');
 var attributes_panel      = document.getElementById('attributes_panel');
 var annotation_data_window;
 
@@ -945,6 +968,17 @@ function _via_init() {
       _via_load_submodules();
     }, 100);
   }
+
+  // labels panel
+  if (localStorage.getItem('_via_loaded_lab_fn_list')) {
+    console.log('load from localStorage: _via_loaded_lab_fn_list='+_via_loaded_lab_fn_list);
+    _via_loaded_lab_fn_list = JSON.parse(localStorage.getItem('_via_loaded_lab_fn_list'));
+  }
+  if (localStorage.getItem('_via_label_index')) {
+    _via_label_index = JSON.parse(localStorage.getItem('_via_label_index'));
+    //console.log('load from localStorage: _via_label_index='+_via_label_index);
+  }
+  update_lab_fn_list();
 }
 
 //
@@ -972,11 +1006,17 @@ function sel_local_images() {
 function download_all_region_data(type) {
   // Javascript strings (DOMString) is automatically converted to utf-8
   // see: https://developer.mozilla.org/en-US/docs/Web/API/Blob/Blob
+  try {
   var all_region_data = pack_via_metadata(type);
   var blob_attr = {type: 'text/'+type+';charset=utf-8'};
   var all_region_data_blob = new Blob(all_region_data, blob_attr);
 
   save_data_to_local_file(all_region_data_blob, 'sub-train-annotations-bbox.'+type);
+  // setTimeout(() => {  console.log("download_all_region_data"); }, 10);
+} catch(e) {
+    console.log('download_all_region_data exception ', e);
+    return false;
+  }
 }
 
 function sel_local_data_file(type) {
@@ -1233,19 +1273,19 @@ function import_annotations_from_csv(data) {
       var region_i = new ImageRegion();
       // copy regions shape attributes
       //region_i.shape_attributes  = {};
-      console.log('import csv x1 ',d[XMin_index],', x2 ',d[XMax_index],', y1 ',d[YMin_index],', y2 ',d[YMax_index]);
+      //console.log('import csv x1 ',d[XMin_index],', x2 ',d[XMax_index],', y1 ',d[YMin_index],', y2 ',d[YMax_index],', d ',d);
       region_i.shape_attributes['name'] = 'rect';
       region_i.shape_attributes['x'] = parseInt(d[XMin_index]);
       region_i.shape_attributes['y'] = parseInt(d[YMin_index]);
       region_i.shape_attributes['width'] = parseInt(d[XMax_index])-parseInt(d[XMin_index]);
       region_i.shape_attributes['height'] = parseInt(d[YMax_index])-parseInt(d[YMin_index]);
-
       // copy region attributes
       // region_i.region_attributes = {}; // region attributes
       // if (!_via_region_attributes.hasOwnProperty(key)) {
       //   _via_region_attributes[key] = true;
       // }
-
+      var label = d[LabelName_index];
+      region_i.region_attributes['label'] = label;
       // add regions only if they are present
       if (Object.keys(region_i.shape_attributes).length > 0 ||
           Object.keys(region_i.region_attributes).length > 0 ) {
@@ -1253,6 +1293,11 @@ function import_annotations_from_csv(data) {
           _via_img_metadata[image_id].regions.push(region_i);
           region_import_count += 1;
         }
+      }
+      // add label to labels list if not already in
+      if (! _via_loaded_lab_fn_list.includes(label)) {
+        _via_loaded_lab_fn_list.push(label);
+        update_lab_fn_list();
       }
     }
   }
@@ -1482,20 +1527,22 @@ function pack_via_metadata(return_type) {
       fattr = escape_for_csv( fattr );
 
       // var prefix = '\n' + _via_img_metadata[image_id].filename;
-      var prefix = '\n' + image_id;
-      prefix += ',' + 'xxx';
-      prefix += ',' + 'recyclable';
-      prefix += ',' + '1';
-      var suffix = '0,0,0,0,0,recyclable,recyclable';
-
       var r = _via_img_metadata[image_id].regions;
+      setTimeout(() => {  console.log('pack_via_metadata image_id ',image_id,', regions ',r); }, 10);
 
       if ( r.length !==0 ) {
         for ( var i = 0; i < r.length; ++i ) {
+
+          var label = r[i].region_attributes['label'];
+          var prefix = '\n' + image_id;
+          prefix += ',' + 'xxx';
+          prefix += ',' + label;
+          prefix += ',' + '1';
+          var suffix = '0,0,0,0,0,'+label+','+label;
+          console.log('prefix='+prefix+', suffix='+suffix);
+
           var csvline = [];
           csvline.push(prefix);
-
-
           //var sattr = map_to_json( r[i].shape_attributes );
           //sattr = '"' +  escape_for_csv( sattr ) + '"';
           var sattr = r[i].shape_attributes;
@@ -1503,7 +1550,7 @@ function pack_via_metadata(return_type) {
           var y1 = sattr["y"];
           var x2 = x1+sattr["width"];
           var y2 = y1+sattr["height"];
-          console.log('pack_via_metadata x1 ',x1,', x2 ',x2,', y1 ',y1,', y2 ',y2);
+          console.log('pack_via_metadata x1 ',x1,', x2 ',x2,', y1 ',y1,', y2 ',y2,', region i ',r[i].region_attributes);
           //csvline.push(sattr);
           csvline.push(x1); csvline.push(x2); csvline.push(y1); csvline.push(y2); csvline.push(suffix);
 
@@ -1863,6 +1910,15 @@ function jump_to_image(image_index) {
 
   if ( image_index >= 0 && image_index < _via_img_count) {
     show_image(image_index);
+  }
+}
+function jump_to_label(label_index) {
+  if ( _via_loaded_lab_fn_list.length <= 0 ) {
+    return;
+  }
+  if ( label_index >= 0 && label_index < _via_loaded_lab_fn_list.length) {
+    _via_label_index = label_index;
+    update_lab_fn_list()
   }
 }
 
@@ -2357,12 +2413,14 @@ _via_reg_canvas.addEventListener('mouseup', function(e) {
           original_img_region.shape_attributes['y'] = y;
           original_img_region.shape_attributes['width'] = width;
           original_img_region.shape_attributes['height'] = height;
+          original_img_region.region_attributes['label'] = _via_loaded_lab_fn_list[_via_label_index];
 
           canvas_img_region.shape_attributes['name'] = 'rect';
           canvas_img_region.shape_attributes['x'] = Math.round( x / _via_canvas_scale );
           canvas_img_region.shape_attributes['y'] = Math.round( y / _via_canvas_scale );
           canvas_img_region.shape_attributes['width'] = Math.round( width / _via_canvas_scale );
           canvas_img_region.shape_attributes['height'] = Math.round( height / _via_canvas_scale );
+          canvas_img_region.region_attributes['label'] = _via_loaded_lab_fn_list[_via_label_index];
 
           _via_img_metadata[_via_image_id].regions.push(original_img_region);
           _via_canvas_regions.push(canvas_img_region);
@@ -4130,6 +4188,9 @@ function save_current_data_to_browser_cache() {
         }
         localStorage.setItem('_via_region_attributes', JSON.stringify(attr));
         _via_is_save_ongoing = false;
+        // save labels
+        localStorage.setItem('_via_label_index', JSON.stringify(_via_label_index));
+        localStorage.setItem('_via_loaded_lab_fn_list', JSON.stringify(_via_loaded_lab_fn_list));
       } catch(err) {
         _via_is_save_ongoing = false;
         _via_is_local_storage_available = false;
@@ -4577,11 +4638,52 @@ function update_img_fn_list() {
   img_fn_list.innerHTML = _via_loaded_img_fn_list_table_html.join('');
   img_fn_list_scroll_to_current_file();
 }
+function update_lab_fn_list() {
+  var regex = document.getElementById('lab_fn_list_regex').value;
+  if ( regex === '' || regex === null ) {
+    _via_loaded_lab_fn_list_table_html = [];
+    _via_loaded_lab_fn_list_file_index = [];
+    _via_loaded_lab_fn_list_table_html.push('<ul>');
+    for ( var i=0; i < _via_loaded_lab_fn_list.length; ++i ) {
+      _via_loaded_lab_fn_list_table_html.push( lab_fn_list_ith_entry_html(i) );
+      _via_loaded_lab_fn_list_file_index.push(i);
+    }
+    _via_loaded_lab_fn_list_table_html.push('</ul>');
+  } else {
+    lab_fn_list_generate_html(regex);
+  }
+  lab_fn_list.innerHTML = _via_loaded_lab_fn_list_table_html.join('');
+  lab_fn_list_scroll_to_current_file();
+}
 
 function img_fn_list_onregex() {
   img_fn_list_generate_html( document.getElementById('img_fn_list_regex').value );
   img_fn_list.innerHTML = _via_loaded_img_fn_list_table_html.join('');
   img_fn_list_scroll_to_current_file();
+}
+function lab_fn_list_onregex() {
+  lab_fn_list_generate_html( document.getElementById('lab_fn_list_regex').value );
+  lab_fn_list.innerHTML = _via_loaded_lab_fn_list_table_html.join('');
+  lab_fn_list_scroll_to_current_file();
+}
+function lab_fn_list_onnew() {
+  var newlab = document.getElementById("lab_fn_list_new").value;
+  var lab_fn_list_add = document.getElementById("lab_fn_list_add");
+  lab_fn_list_add.disabled = (newlab.length > 0) ? false : true;
+}
+function lab_fn_list_onadd() {
+  var lab_fn_list_add = document.getElementById("lab_fn_list_add");
+  lab_fn_list_add.disabled = true;
+  var newlab = document.getElementById("lab_fn_list_new").value;
+  document.getElementById("lab_fn_list_new").value = "";
+  _via_loaded_lab_fn_list.push(newlab);
+  _via_label_index = _via_loaded_lab_fn_list.length - 1;
+  update_lab_fn_list();
+  localStorage.setItem('_via_label_index', JSON.stringify(_via_label_index));
+  localStorage.setItem('_via_loaded_lab_fn_list', JSON.stringify(_via_loaded_lab_fn_list));
+  // console.log("newlab="+newlab);
+  // console.log("_via_label_index="+_via_label_index);
+  // console.log("_via_loaded_lab_fn_list="+_via_loaded_lab_fn_list);
 }
 
 function img_fn_list_ith_entry_html(i) {
@@ -4593,6 +4695,20 @@ function img_fn_list_ith_entry_html(i) {
     htmli += '<b>[' + (i+1) + '] ' + filename + '</b>';
   } else {
     htmli += '<li id="flist'+i+'" onclick="jump_to_image(' + (i) + ')">';
+    htmli += '[' + (i+1) + '] ' + filename;
+  }
+  htmli += '</li>';
+  return htmli;
+}
+function lab_fn_list_ith_entry_html(i) {
+  var htmli = '';
+  var filename = _via_loaded_lab_fn_list[i];
+  if ( i === _via_label_index ) {
+    // highlight the current entry
+    htmli += '<li id="lablist'+i+'" style="cursor: default;">';
+    htmli += '<b>[' + (i+1) + '] ' + filename + '</b>';
+  } else {
+    htmli += '<li id="lablist'+i+'" onclick="jump_to_label(' + (i) + ')">';
     htmli += '[' + (i+1) + '] ' + filename;
   }
   htmli += '</li>';
@@ -4612,6 +4728,19 @@ function img_fn_list_generate_html(regex) {
   }
   _via_loaded_img_fn_list_table_html.push('</ul>');
 }
+function lab_fn_list_generate_html(regex) {
+  _via_loaded_lab_fn_list_table_html = [];
+  _via_loaded_lab_fn_list_file_index = [];
+  _via_loaded_lab_fn_list_table_html.push('<ul>');
+  for ( var i=0; i < _via_loaded_lab_fn_list.length; ++i ) {
+    var filename = _via_loaded_lab_fn_list[i];
+    if ( filename.match(regex) !== null ) {
+      _via_loaded_lab_fn_list_table_html.push( lab_fn_list_ith_entry_html(i) );
+      _via_loaded_lab_fn_list_file_index.push(i);
+    }
+  }
+  _via_loaded_lab_fn_list_table_html.push('</ul>');
+}
 
 function img_fn_list_scroll_to_current_file() {
   if( _via_loaded_img_fn_list_file_index.includes(_via_image_index) ) {
@@ -4619,6 +4748,15 @@ function img_fn_list_scroll_to_current_file() {
     var panel_height = img_fn_list.clientHeight;
     if ( sel_file.offsetTop > ( img_fn_list.scrollTop + panel_height) ) {
       img_fn_list.scrollTop = sel_file.offsetTop;
+    }
+  }
+}
+function lab_fn_list_scroll_to_current_file() {
+  if( _via_loaded_lab_fn_list_file_index.includes(_via_label_index) ) {
+    var sel_file     = document.getElementById( 'lablist' + _via_label_index );
+    var panel_height = lab_fn_list.clientHeight;
+    if ( sel_file.offsetTop > ( lab_fn_list.scrollTop + panel_height) ) {
+      lab_fn_list.scrollTop = sel_file.offsetTop;
     }
   }
 }
